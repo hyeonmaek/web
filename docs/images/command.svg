@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 250" font-family="Apple SD Gothic Neo, Noto Sans KR, Malgun Gothic, sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#7d848b"/></marker></defs>
+<rect width="1000" height="250" rx="14" fill="#f6f7f5"/>
+<text x="32" y="44" font-size="20" font-weight="700" fill="#1d2125">명령은 분대가 송신할 때만 내려갑니다</text>
+<text x="32" y="68" font-size="13" fill="#6b7177">평소에는 분대 쪽 장비가 반응하지 않습니다</text>
+<g font-size="12.5" text-anchor="middle">
+<rect x="32" y="98" width="200" height="110" rx="10" fill="#fff" stroke="#3a3f45" stroke-width="1.5"/>
+<text x="132" y="128" font-size="13" font-weight="700" fill="#1d2125">① C2</text><text x="132" y="156" fill="#3a3f45">명령 작성</text><text x="132" y="178" font-weight="700" fill="#a8551c">대기</text>
+<rect x="276" y="98" width="200" height="110" rx="10" fill="#eef4ef" stroke="#4f7d58" stroke-width="1.5"/>
+<text x="376" y="128" font-size="13" font-weight="700" fill="#2f5d38">② 분대원 송신</text><text x="376" y="156" fill="#3a3f45">사격개시 · 긴급구호</text><text x="376" y="178" fill="#3a3f45">폰 메시지</text>
+<rect x="520" y="98" width="200" height="110" rx="10" fill="#26388a"/>
+<text x="620" y="128" font-size="13" font-weight="700" fill="#fff">③ 게이트웨이</text><text x="620" y="156" fill="#c9d2f2">보고를 C2로</text><text x="620" y="178" fill="#c9d2f2">대기 명령을 받아 옴</text>
+<rect x="764" y="98" width="204" height="110" rx="10" fill="#fff" stroke="#d23b2f" stroke-width="1.5"/>
+<text x="866" y="128" font-size="13" font-weight="700" fill="#d23b2f">④ 하달</text><text x="866" y="156" fill="#3a3f45">전체 명령 → 분대 모두</text><text x="866" y="178" fill="#3a3f45">개별 명령 → 지정 병사</text>
+</g>
+<g stroke="#7d848b" stroke-width="2.5"><line x1="236" y1="153" x2="270" y2="153" marker-end="url(#a)"/><line x1="480" y1="153" x2="514" y2="153" marker-end="url(#a)"/><line x1="724" y1="153" x2="758" y2="153" marker-end="url(#a)"/></g>
+</svg>
