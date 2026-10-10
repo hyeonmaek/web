@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C2</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- C2 화면: 지도 + 아군 현황 + 보고 + 명령.
+     톤: ATAK 느낌(검정 바탕, Holo 하늘색, 호출부호 시안). 지도 라이브러리(Leaflet)만 외부. -->
+<style>
+:root{
+  --bg:#0b0b0b; --bar:#000; --panel:#141516; --panel2:#1c1e21; --row:#141516;
+  --sep:#2c2e31; --white:#f2f2f2; --grey:#9a9ea3; --grey-2:#8a9096;
+  --holo:#33b5e5; --callsign:#4fd8f7; --green:#5fd12a; --yellow:#f5d90a;
+  --orange:#f39a1d; --red:#e0201b; --red-text:#ff6b63; --box:rgba(0,0,0,.72);
+}
+*{box-sizing:border-box;}
+[hidden]{display:none !important;}
+html,body{margin:0;height:100%;}
+body{
+  background:var(--bg); color:var(--white);
+  font:16px/1.4 Roboto,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  display:flex; flex-direction:column; overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+.bar{
+  display:flex; align-items:center; gap:24px; background:var(--bar);
+  height:58px; padding:0 22px; flex:none; font-size:17px;
+}
+.bar .title{font-size:21px; font-weight:500;}
+.bar .lbl{color:var(--grey); margin-right:6px;}
+.bar .grow{flex:1;}
+.bar .bad{color:var(--red-text); font-weight:700;}
+.bar .ok{color:var(--green); font-weight:700;}
+.bar .clock{font-size:21px; font-variant-numeric:tabular-nums;}
+
+.main{flex:1; display:flex; min-height:0;}
+
+/* 왼쪽: 좌표 평면 */
+.mapwrap{flex:1; display:flex; flex-direction:column; min-width:0; border-right:1px solid #000;}
+.maphead{display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--sep); flex:none;}
+.maphead h2{font-size:16px; margin:0; font-weight:700; color:var(--white);}
+.maphead .legend{display:flex; gap:16px; font-size:13px; color:var(--grey); flex-wrap:wrap;}
+.maphead .legend i{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:middle;}
+.lg-me{background:var(--callsign);} .lg-en{background:var(--red);} .lg-sos{background:var(--yellow);}
+.map{flex:1; min-height:0; position:relative;}
+#lmap{position:absolute; inset:0; background:#0a0c0d;}
+.leaflet-container{font-family:inherit;}
+.lbl-tip{background:rgba(10,12,13,.85); border:1px solid #2c2e31; color:#e8ebe6; font-weight:700; font-size:13px; padding:2px 7px; border-radius:6px; box-shadow:none;}
+.lbl-tip.en{color:#ff6b63; border-color:#e0201b;}
+.lbl-tip.sos{color:#f5d90a; border-color:#a68f00;}
+.lbl-tip.info{font-weight:400; line-height:1.45; text-align:left;}
+.lbl-tip.info b{color:var(--callsign);}
+.lbl-tip::before{display:none;}
+.map .empty-note{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#8a9096; font-size:15px; pointer-events:none; z-index:500;}
+.unknown{padding:8px 18px; font-size:13px; color:var(--orange); border-top:1px solid var(--sep); flex:none;}
+
+/* 오른쪽: 기록 + 명령 */
+.side{width:420px; background:var(--panel2); display:flex; flex-direction:column;}
+.side h2{font-size:15px; margin:0; padding:14px 18px 10px; color:var(--grey); font-weight:700; letter-spacing:.03em;}
+.log{flex:1; overflow:auto; list-style:none; margin:0; padding:0;}
+.log li{padding:11px 18px; border-bottom:1px solid var(--sep); font-size:15px;}
+.log li.engagement.open{background:#3a0807;}
+.log .top{display:flex; align-items:baseline; gap:10px;}
+.log .t{color:var(--grey); font-size:13px; font-variant-numeric:tabular-nums;}
+.log .who{color:var(--callsign); font-weight:700;}
+.log .kind{font-weight:700; font-size:13px; padding:1px 7px; border-radius:3px; border:1px solid var(--sep);}
+.k-engagement{color:#fff; background:var(--red);}
+.k-sos{color:#000; background:var(--yellow);}
+.k-message{color:var(--holo); border-color:var(--holo)!important;}
+.k-correction{color:var(--orange); border-color:var(--orange)!important;}
+.log .fire{font-weight:700; color:var(--red-text);}
+.log .hold{font-weight:700; color:var(--grey);}
+.log .meta{color:var(--grey); font-size:13px; margin-top:3px;}
+.log .msg{margin-top:4px; color:var(--white);}
+.empty{color:var(--grey-2); padding:22px 18px;}
+
+.cmd{flex:none; border-top:1px solid #000; background:#101214; padding:14px 18px;}
+.cmd .queue{max-height:130px; overflow:auto; margin-bottom:10px;}
+.cmd .qitem{display:flex; gap:8px; align-items:baseline; font-size:13px; padding:4px 0; border-bottom:1px dashed var(--sep);}
+.cmd .qitem .to{color:var(--callsign); font-weight:700; min-width:34px;}
+.cmd .qitem .st{margin-left:auto; font-size:12px;}
+.cmd .qitem .pending{color:var(--yellow);}
+.cmd .qitem .done{color:var(--green);}
+.cmd form{display:grid; grid-template-columns:76px 1fr auto; gap:8px;}
+.cmd input,.cmd select,.cmd button{font:inherit; font-size:15px; border-radius:4px; border:1px solid var(--sep); background:#0a0c0d; color:var(--white); padding:9px 10px;}
+.cmd button{background:var(--holo); color:#001018; font-weight:700; border:0; cursor:pointer;}
+.cmd button:hover{filter:brightness(1.1);}
+.cmd .hint{font-size:12px; color:var(--grey-2); margin-top:8px;}
+
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--holo); outline-offset:1px;}
+.bar .sub{color:var(--grey); font-size:14px;}
+.gw{display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700;}
+.gw i{width:10px; height:10px; border-radius:50%; background:var(--grey);}
+.gw.on{color:var(--green);} .gw.on i{background:var(--green); box-shadow:0 0 8px var(--green);}
+.gw.off{color:var(--red-text);} .gw.off i{background:var(--red);}
+.gw.unk{color:var(--grey);}
+.tocdown{background:var(--red); color:#fff; font-weight:700; text-align:center; padding:6px; letter-spacing:.08em; flex:none;}
+.lg-est{background:transparent; border:2px solid var(--red);}
+.bf{list-style:none; margin:0; padding:0 0 6px; flex:none; max-height:190px; overflow:auto;}
+.bf li{display:grid; grid-template-columns:14px 52px 1fr auto; align-items:center; gap:10px; padding:8px 18px; border-bottom:1px solid var(--sep); font-size:14px;}
+.bf .dot{width:10px; height:10px; border-radius:50%; background:var(--grey);}
+.bf .dot.on{background:var(--green);}
+.bf .cs{color:var(--callsign); font-weight:700;}
+.bf .info{color:var(--grey); font-variant-numeric:tabular-nums;}
+.bf .age{color:var(--grey); font-size:12px; font-variant-numeric:tabular-nums;}
+.bf .none{display:block; color:var(--grey-2); grid-template-columns:none;}
+.side h2.sec{border-top:1px solid #000;}
+
+
+@media (max-width:950px){
+  body{overflow:auto;}
+  .main{flex-direction:column;}
+  .side{width:auto;}
+  .map{min-height:320px;}
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <span class="title">C2</span>
+  <div class="grow"></div>
+  <span class="gw unk" id="gw"><i></i><span id="gwText">기지국 미확인</span></span>
+  <span class="clock" id="clock">--</span>
+</div>
+<div class="tocdown" id="tocDown" hidden>작전본부 서버 응답 없음</div>
+
+<div class="main">
+  <div class="mapwrap">
+    <div class="maphead">
+      <div class="legend">
+        <span><i class="lg-me"></i>아군</span>
+        <span><i class="lg-en"></i>적 방위선 ±15°</span>
+        <span><i class="lg-sos"></i>긴급구호</span>
+      </div>
+    </div>
+    <div class="map"><div id="lmap"></div><div class="empty-note" id="emptyNote">좌표가 담긴 보고 없음</div></div>
+  </div>
+
+  <div class="side">
+    <h2>아군 현황</h2>
+    <ul class="bf" id="bf"></ul>
+    <h2 class="sec">보고</h2>
+    <ul class="log" id="log"></ul>
+    <div class="cmd">
+      <h2 style="padding:0 0 8px">명령</h2>
+      <div class="queue" id="queue"></div>
+      <form id="cmdForm">
+        <select id="cmdTo" aria-label="수신 대상"></select>
+        <input id="cmdText" placeholder="명령 내용" maxlength="200" aria-label="명령 내용">
+        <button type="submit">하달</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>/*__GEO__*/</script>
+<script>
+const $ = (id) => document.getElementById(id);
+const p2 = (n) => String(n).padStart(2, '0');
+const hms = (t) => { const d = new Date(t); return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; };
+// 일시군(DTG): 일·시·분 + 시간대(한국 UTC+9 = K)
+const dtg = (t) => { const d = new Date(t); return `${p2(d.getDate())}${p2(d.getHours())}${p2(d.getMinutes())}K`; };
+const when = (t) => { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${hms(t)}`; };
+const ago = (ms) => ms < 60000 ? `${Math.round(ms / 1000)}s` : ms < 3600000 ? `${Math.round(ms / 60000)}m` : `${Math.round(ms / 3600000)}h`;
+const KIND = { engagement: '교전', sos: '긴급구호', message: '메시지', correction: '정정' };
+
+let state = { reports: [], commands: [], enemies: [], units: [], gateway: { known: false, online: false, peers: [] } };
+let CALL = {};
+const cs = (id) => CALL[String(id).toUpperCase()] || String(id).toUpperCase();
+
+// ---------------- COP 지도 (Leaflet) ----------------
+let lmap = null, layer = null, lastFitKey = '';
+
+// 위치에서 방위(도)로 m만큼 간 지점
+function dest(lat, lon, brgDeg, m) {
+  const R = 6371000, d = m / R, b = brgDeg * Math.PI / 180;
+  const p1 = lat * Math.PI / 180, l1 = lon * Math.PI / 180;
+  const q = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+  const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(q));
+  return [q * 180 / Math.PI, l2 * 180 / Math.PI];
+}
+
+function drawMap() {
+  if (typeof L === 'undefined') { $('emptyNote').textContent = '지도를 불러오지 못했습니다(인터넷 필요)'; return; }
+  if (!lmap) {
+    lmap = L.map('lmap').setView([37.5665, 126.978], 15);
+    const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Imagery &copy; Esri' }).addTo(lmap);
+    const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' });
+    L.control.layers({ '위성': sat, '일반 지도': osm }, null, { position: 'topright' }).addTo(lmap);
+    layer = L.layerGroup().addTo(lmap);
+  }
+  layer.clearLayers();
+
+  const located = state.reports.filter((r) => typeof r.lat === 'number' && typeof r.lon === 'number');
+  $('emptyNote').style.display = located.length ? 'none' : 'flex';
+  const bounds = [];
+
+  // 적 방향선(LOB): 오차 범위 부채꼴(±15°) + 정확한 방향 직선. 병사별 최신 보고만.
+  const SPREAD = 15, REACH = 100;   // 소부대 교전 거리
+  const latestLob = {};
+  for (const r of located) {
+    if (typeof r.bearing !== 'number') continue;
+    if (!latestLob[r.from] || r.ts > latestLob[r.from].ts) latestLob[r.from] = r;
+  }
+  for (const r of Object.values(latestLob)) {
+    const col = r.type === 'engagement' || r.type === 'correction' ? '#e0201b' : '#f39a1d';
+    const wedge = [[r.lat, r.lon]];
+    for (let a = r.bearing - SPREAD; a <= r.bearing + SPREAD + 0.01; a += 3) wedge.push(dest(r.lat, r.lon, a, REACH));
+    L.polygon(wedge, { color: col, weight: 1, opacity: 0.5, fillColor: col, fillOpacity: 0.16 }).addTo(layer);
+    L.polyline([[r.lat, r.lon], dest(r.lat, r.lon, r.bearing, REACH)], { color: col, weight: 3, opacity: 0.95 })
+      .bindTooltip(`${cs(r.from)} 방위각 ${String(r.bearing).padStart(3, '0')}°`, { sticky: true, className: 'lbl-tip en' })
+      .addTo(layer);
+  }
+  // 아군 위치(병사별 최신)
+  const latest = {};
+  for (const r of located) if (!latest[r.from] || r.ts > latest[r.from].ts) latest[r.from] = r;
+  for (const r of Object.values(latest)) {
+    const sos = r.type === 'sos';
+    // 방향선이 위(북쪽 반)를 향하면 라벨은 아래에 붙여 선을 가리지 않게
+    const lob = latestLob[r.from];
+    const up = lob ? (lob.bearing >= 270 || lob.bearing <= 90) : false;
+    const label = `<b>${cs(r.from)}</b> ${KIND[r.type] || ''}${r.locFrom ? ` · ${cs(r.locFrom)} 근처` : ''}<br>${when(r.ts)}<br>${escapeHtml(r.address || '주소 찾는 중…')}<br>${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}`;
+    L.circleMarker([r.lat, r.lon], { radius: 8, color: '#000', weight: 2, fillColor: sos ? '#f5d90a' : '#4fd8f7', fillOpacity: 1 })
+      .bindTooltip(label, r.locFrom   // 근사 위치는 분대원 점과 겹치므로 라벨을 옆으로
+        ? { permanent: true, direction: 'right', className: 'lbl-tip info' + (sos ? ' sos' : ''), offset: [12, 0] }
+        : { permanent: true, direction: up ? 'bottom' : 'top', className: 'lbl-tip info' + (sos ? ' sos' : ''), offset: [0, up ? 10 : -10] })
+      .addTo(layer);
+    bounds.push([r.lat, r.lon]);
+  }
+  const key = String(located.length);
+  if (bounds.length && key !== lastFitKey) {
+    lastFitKey = key;
+    lmap.setView(L.latLngBounds(bounds).getCenter(), 18);   // 소부대 교전 거리(100m 방위선)가 잘 보이는 확대
+  }
+}
+
+// ---------------- 기지국 · 아군 현황 ----------------
+function drawGateway() {
+  const g = state.gateway || {};
+  const el = $('gw');
+  if (g.online) { el.className = 'gw on'; $('gwText').textContent = '기지국 연결'; }
+  else if (g.known) { el.className = 'gw off'; $('gwText').textContent = g.lastOk ? `기지국 끊김 · ${ago(Date.now() - g.lastOk)} 전` : '기지국 끊김'; }
+  else { el.className = 'gw unk'; $('gwText').textContent = '기지국 미확인'; }
+
+  const peers = (g.peers || []).slice().sort((a, b) => cs(a.id).localeCompare(cs(b.id)));
+  $('bf').innerHTML = !g.online
+    ? '<li class="none">기지국과 연결되지 않음</li>'
+    : peers.length ? peers.map((p) => `
+      <li>
+        <span class="dot ${p.online ? 'on' : ''}"></span>
+        <span class="cs">${cs(p.id)}</span>
+        <span class="info">${p.battery >= 0 ? p.battery + '%' : '--'} · ${p.rssi} dBm</span>
+        <span class="age">${p.online ? '통신 중' : ago(p.age) + ' 전'}</span>
+      </li>`).join('')
+    : '<li class="none">수신된 병사 없음</li>';
+}
+
+// ---------------- 보고 기록 ----------------
+function drawLog() {
+  const list = [...state.reports].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  $('log').innerHTML = list.length ? list.map((r) => {
+    const has = typeof r.lat === 'number' && typeof r.lon === 'number';
+    const near = r.locFrom ? `${cs(r.locFrom)} 근처 · ` : '';
+    const loc = has ? `${near}${escapeHtml(r.address || '주소 찾는 중…')}<br>${r.lat.toFixed(5)}, ${r.lon.toFixed(5)}` : '위치 없음(폰 미연결)';
+    const brg = typeof r.bearing === 'number' ? ` · 방위각 ${String(r.bearing).padStart(3, '0')}°` : '';
+    return `<li class="${r.type} ${r.fire || ''}">
+      <div class="top">
+        <span class="t">${when(r.ts)}</span>
+        <span class="who">${cs(r.from)}</span>
+        <span class="kind k-${r.type}">${KIND[r.type] || r.type}</span>
+      </div>
+      <div class="meta">${loc}${brg}</div>
+      ${r.text ? `<div class="msg">${escapeHtml(r.text)}</div>` : ''}
+    </li>`;
+  }).join('') : '<li class="empty">보고 없음</li>';
+}
+
+function drawQueue() {
+  const list = [...state.commands].sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  $('queue').innerHTML = list.length ? list.map((c) => `
+    <div class="qitem">
+      <span class="to">${c.to === 'FF' ? '전체' : cs(c.to)}</span>
+      <span>${escapeHtml(c.text)}</span>
+      <span class="st ${c.delivered ? 'done' : 'pending'}">${cmdStatus(c)}</span>
+    </div>`).join('') : '<div style="color:#8a9096;font-size:13px">명령 없음</div>';
+
+  // 대상 목록: 전체 + 기지국이 지금 듣고 있는(통신 중) 병사만. 선택한 병사가 끊기면 전체로.
+  const sel = $('cmdTo');
+  const g = state.gateway || {};
+  const live = g.online ? (g.peers || []).filter((p) => p.online) : [];
+  const opts = [['FF', '전체']].concat(live.map((p) => [p.id, cs(p.id)]).sort((a, b) => a[1].localeCompare(b[1])));
+  const cur = opts.some(([v]) => v === sel.value) ? sel.value : 'FF';
+  const html = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+  if (sel.dataset.h !== html) { sel.innerHTML = html; sel.dataset.h = html; sel.value = cur; }
+}
+
+// 명령은 병사가 송신할 때 전달된다. 개별: 대기/전달됨, 전체: 받은 병사 이름
+function cmdStatus(c) {
+  const got = c.deliveredTo || [];
+  if (c.to !== 'FF') return got.length ? '전달됨' : '대기';
+  return got.length ? got.map(cs).join(' ') + ' 전달' : '대기';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// ---------------- 폴링 ----------------
+async function poll() {
+  try {
+    const res = await fetch('/state', { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    state = await res.json();
+    CALL = Object.fromEntries((state.units || []).map((u) => [u.id, u.callsign]));
+    $('tocDown').hidden = true;
+  } catch (e) {
+    $('tocDown').hidden = false;
+  }
+  drawGateway(); drawMap(); drawLog(); drawQueue();
+}
+
+$('cmdForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const to = $('cmdTo').value || 'FF';
+  const text = $('cmdText').value.trim();
+  if (!text) return;
+  try {
+    const r = await fetch('/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to, text }) });
+    if (!r.ok) throw new Error(r.status);
+    $('cmdText').value = '';
+    poll();
+  } catch (err) { $('tocDown').hidden = false; }
+});
+
+const tick = () => { const d = new Date(); $('clock').textContent = `${d.getMonth() + 1}월 ${d.getDate()}일 ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())} · ${dtg(d)}`; };
+poll(); tick();
+setInterval(poll, 2000);
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

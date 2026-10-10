@@ -1,0 +1,22 @@
+# TOC 데이터베이스 (PostgreSQL). 실행: docker compose up -d   (server 폴더에서)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: toc-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: toc
+      POSTGRES_PASSWORD: toc
+      POSTGRES_DB: toc
+    ports:
+      - "5433:5432"          # 맥에 이미 5432 Postgres가 있어도 겹치지 않게
+    volumes:
+      - toc-pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toc -d toc"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  toc-pgdata:

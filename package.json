@@ -1,0 +1,15 @@
+{
+  "name": "toc-server",
+  "private": true,
+  "description": "TOC (중앙 지휘소) 서버 — 보고 기록·FRAGO 전달·기지국 상태",
+  "main": "server.js",
+  "scripts": {
+    "db": "docker compose up -d",
+    "start": "node server.js",
+    "test": "node test.js",
+    "reset": "node reset.js"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  }
+}
