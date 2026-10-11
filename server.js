@@ -216,7 +216,9 @@ async function runGeoQueue() {
 
 // ---------------- 기지국(NU-87) ----------------
 // online: 마지막 /data 응답 성공 여부. peers: 기지국이 듣고 있는 병사들.
-const gateway = { ip: null, online: false, lastOk: null, peers: [] };
+const gateway = { ip: null, online: false, lastOk: null, peers: [], fails: 0 };
+// 행사장 와이파이는 응답이 가끔 늦다 → 연속 2번 실패해야 '끊김'으로 표시
+function gatewayFail() { if (++gateway.fails >= 2) gateway.online = false; }
 
 function toUtf16Hex(text) {
   let h = '';
@@ -250,16 +252,17 @@ function pollGateway() {
       try {
         const d = JSON.parse(buf);
         gateway.online = true;
+        gateway.fails = 0;
         gateway.lastOk = Date.now();
         gateway.peers = (d.peers || []).map((p) => ({
           id: String(p.id).toUpperCase(), rssi: p.rssi, battery: p.battery, event: p.event,
           age: p.age, online: p.age < PEER_ONLINE_MS,
         }));
-      } catch (e) { gateway.online = false; }
+      } catch (e) { gatewayFail(); }
     });
   });
-  r.on('error', () => { gateway.online = false; });
-  r.setTimeout(1500, () => { gateway.online = false; r.destroy(); });
+  r.on('error', gatewayFail);
+  r.setTimeout(2500, () => r.destroy());
 }
 
 // ---------------- HTTP ----------------
