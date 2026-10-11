@@ -229,10 +229,13 @@ function drawMap() {
       .addTo(layer);
     bounds.push([r.lat, r.lon]);
   }
-  const key = String(located.length);
-  if (bounds.length && key !== lastFitKey) {
-    lastFitKey = key;
-    lmap.setView(L.latLngBounds(bounds).getCenter(), 18);   // 소부대 교전 거리(100m 방위선)가 잘 보이는 확대
+  // 새 보고(교전·긴급구호 등)가 좌표와 함께 들어오면 그 위치로 지도를 옮긴다. 처음 열 때는 가장 최근 보고 위치로.
+  const newest = located.reduce((m, r) => (!m || r.id > m.id ? r : m), null);
+  if (newest && String(newest.id) !== lastFitKey) {
+    const first = lastFitKey === '';
+    lastFitKey = String(newest.id);
+    if (first) lmap.setView([newest.lat, newest.lon], 18);
+    else lmap.flyTo([newest.lat, newest.lon], 18, { duration: 1.2 });   // 소부대 교전 거리(100m 방위선)가 잘 보이는 확대
   }
 }
 
