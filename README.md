@@ -1,3 +1,5 @@
+<img src="docs/images/logo.png" width="120" alt="현맥">
+
 # 현맥 · C2
 
 **분대가 말을 걸 때만 듣고, 그때만 답합니다.**
